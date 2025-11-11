@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <!--
+    Reportes de Grupos de Amistad · PWA de un solo archivo
+    Cambios en esta versión:
+      - BOTONES ARREGLADOS:
+        • Instalar: ahora muestra instrucciones si el navegador no ofrece el diálogo nativo; intenta instalar si es posible.
+        • Respaldo: usa File System Access API cuando esté disponible; si no, descarga o abre en nueva pestaña (iOS).
+        • Restaurar: usa selector de archivos moderno o input tradicional; validación robusta y refresco total de la UI.
+      - Se mantienen: WhatsApp con imagen-resumen (foto + informe), moneda en €, degradados y títulos más grandes.
+  -->
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0f6f7b" />
+  <title>Reportes GA · PWA</title>
+
+  <style>
+    :root{
+      --bg-0: #071015;
+      --bg-1: #0a1219;
+      --bg-2: #0d1821;
+      --bg-3: #10202a;
+      --card-top: #0f1f29;
+      --card-bottom: #0b141a;
+      --card-2-top: #122532;
+      --card-2-bottom: #0b151c;
+      --outline-1: #203545;
+      --outline-2: #1b2b39;
+      --primary: #0f6f7b;
+      --primary-700: #0b5660;
+      --accent: #ffd166;
+      --text: #eaf3f9;
+      --muted: #9fb0c0;
+      --success: #34d399;
+      --danger: #ef4444;
+      --warning: #fbbf24;
+      --radius: 14px;
+      --radius-sm: 12px;
+      --shadow-1: 0 8px 30px rgba(0,0,0,.40);
+      --shadow-2: 0 14px 40px rgba(0,0,0,.50);
+      --focus: 0 0 0 3px rgba(15,111,123,.35), 0 0 0 6px rgba(15,111,123,.15);
+      --font-sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+      --gap: 14px;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body{
+      margin:0; font-family: var(--font-sans); color: var(--text);
+      background:
+        radial-gradient(1200px 800px at 10% -20%, #0b1c26 0%, var(--bg-1) 60%) fixed,
+        linear-gradient(180deg, var(--bg-0) 0%, var(--bg-1) 60%, var(--bg-0) 100%);
+      background-attachment: fixed; line-height: 1.35;
+    }
+    img{ max-width: 100%; display:block; }
+    a{ color: var(--accent); text-decoration: none; }
+    a:hover{ text-decoration: underline; }
+    button, input, select, textarea{ font: inherit; color: inherit; background: transparent; border: 0; outline: none; }
+    button{ cursor: pointer; }
+    :focus-visible { box-shadow: var(--focus); border-radius: 10px; outline: none; }
+
+    header{
+      position: sticky; top: 0; z-index: 50;
+      background:
+        linear-gradient(180deg, rgba(7,16,21,.95), rgba(10,18,25,.85)),
+        linear-gradient(180deg, var(--bg-2), var(--bg-1));
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--outline-2);
+    }
+    .header-inner{
+      max-width: 1100px; margin: 0 auto; padding: 14px;
+      display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px;
+    }
+    .brand{ display:flex; align-items:center; gap:10px; }
+    .logo{
+      width:36px; height:36px; border-radius: 10px;
+      background: conic-gradient(from 210deg at 50% 50%, #23a6b7, var(--primary) 45%, #0a5660 70%, #23a6b7);
+      box-shadow: inset 0 0 20px rgba(255,255,255,.08), 0 10px 20px rgba(14,124,134,.25);
+      position: relative; overflow: hidden;
+    }
+    .logo::after{
+      content:""; position:absolute; inset:3px; border-radius: 8px;
+      background: radial-gradient(100px 80px at 30% 20%, rgba(255,255,255,.25), transparent 50%),
+                  linear-gradient(145deg, rgba(255,255,255,.1), transparent 40%);
+    }
+    .brand h1{ margin:0; font-size: 1rem; letter-spacing:.3px; color: #eaf3f9; }
+    .header-actions{ display:flex; gap:8px; }
+
+    .btn{
+      --bg: var(--primary); --bg-h: var(--primary-700); --text: #eaf6f8;
+      background: linear-gradient(180deg, var(--bg), var(--bg-h));
+      color: var(--text); padding: 10px 14px; border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.06);
+      box-shadow: 0 6px 16px rgba(14,124,134,.3), inset 0 1px 0 rgba(255,255,255,.1);
+      transition: transform .08s ease, filter .2s ease, background .2s ease;
+      display:inline-flex; align-items:center; gap:8px;
+    }
+    .btn:hover{ filter: brightness(1.06); }
+    .btn:active{ transform: translateY(1px); }
+    .btn.secondary{ --bg: #172632; --bg-h:#111e28; --text:#d7e1ea; border-color: #223648; box-shadow: 0 6px 16px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06); }
+    .btn.ghost{ background: linear-gradient(180deg, rgba(23,38,50,.35), rgba(17,30,40,.25)); border: 1px solid #223648; box-shadow: none; color:#d7e1ea; }
+    .btn.warning{ --bg: #f59e0b; --bg-h: #d97706; }
+    .btn.success{ --bg: #22c55e; --bg-h: #16a34a; }
+    .btn.danger{ --bg: #ef4444; --bg-h: #dc2626; }
+    .btn:disabled{ opacity:.6; cursor:not-allowed; }
+
+    main{
+      max-width: 1100px; margin: 14px auto; padding: 0 14px 90px;
+      display:grid; gap: var(--gap);
+    }
+
+    section, aside, .card{
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,0)) border-box,
+        linear-gradient(180deg, var(--card-top), var(--card-bottom)) padding-box;
+      border: 1px solid transparent; border-radius: var(--radius); box-shadow: var(--shadow-1); padding: 14px;
+    }
+    .card.alt{
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,0)) border-box,
+        linear-gradient(180deg, var(--card-2-top), var(--card-2-bottom)) padding-box;
+    }
+
+    section h2, aside h2{
+      font-size: 1.28rem;
+      margin: 0 0 10px; color: #f2f7fb; letter-spacing: .2px; line-height: 1.2;
+      text-shadow: 0 1px 0 rgba(0,0,0,.35);
+    }
+    @media (min-width: 768px){ section h2, aside h2{ font-size: 1.34rem; } }
+    .muted { color: var(--muted); font-size: .95rem; }
+
+    .group-card{ display:grid; gap: 10px; }
+    .group-row{ display:grid; grid-template-columns: 1fr auto; align-items:center; gap:10px; }
+    .inline{ display:flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+    .tag{
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0)) border-box,
+        linear-gradient(180deg, #0e1b23, #0a141a) padding-box;
+      color:#dbe9f5; border:1px solid #274156;
+      padding: 6px 10px; border-radius: 999px; font-size: .9rem;
+    }
+
+    .week-bar{
+      display:grid; gap:8px; grid-template-columns: 1fr; align-items:center;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,0)) border-box,
+        linear-gradient(180deg, #0d1b24, #0a1218) padding-box;
+      border:1px solid #243a4c; border-radius: var(--radius-sm); padding: 12px;
+    }
+    .week-bar .row{ display:flex; gap:8px; align-items:center; flex-wrap: wrap; }
+
+    input[type="date"], input[type="text"], input[type="number"], textarea{
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0)) border-box,
+        linear-gradient(180deg, #0b1820, #0a1419) padding-box;
+      color: #d8e6f3; border: 1px solid #274156;
+      border-radius: 12px; padding: 10px 12px; width:100%;
+      transition: border-color .15s ease, box-shadow .15s ease, filter .2s ease;
+    }
+    input[type="date"]:focus, input[type="text"]:focus, input[type="number"]:focus, textarea:focus{ border-color: #2f5166; box-shadow: var(--focus); }
+    textarea{ resize: vertical; min-height: 110px; }
+
+    .members{ display:grid; gap:8px; }
+    .member-item{
+      display:grid; grid-template-columns: 1fr auto; align-items:center; gap:8px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0)) border-box,
+        linear-gradient(180deg, #0e1c25, #0a141a) padding-box;
+      border: 1px solid #274156; border-radius: var(--radius-sm); padding: 8px 10px;
+    }
+    .member-name{ font-weight: 600; color: #e8f2fb; letter-spacing:.2px; }
+    .presence-toggle{ display:flex; align-items:center; gap:6px; }
+    .toggle{
+      position: relative; width: 60px; height: 34px; border-radius: 999px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0)) border-box,
+        linear-gradient(180deg, #172632, #111e28) padding-box;
+      border:1px solid #2a455a;
+    }
+    .toggle[data-pressed="true"]{
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0)) border-box,
+        linear-gradient(180deg, #145a32, #0e4225) padding-box;
+      border-color: #2d7c52;
+    }
+    .toggle[data-pressed="true"] .knob{ transform: translateX(26px); background:#34d399; }
+    .toggle[data-pressed="false"] .knob{ transform: translateX(0); background:#ef4444; }
+    .knob{
+      position:absolute; top:3px; left:3px; width:28px; height:28px; border-radius: 50%;
+      transition: transform .2s ease, background .2s ease;
+      box-shadow: 0 4px 10px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.08);
+    }
+    .status-label{
+      min-width:74px; text-align:center; font-size:.9rem; padding:6px 8px; border-radius: 10px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0)) border-box,
+        linear-gradient(180deg, #0e1b23, #0a141a) padding-box;
+      border:1px solid #274156; color:#cfe3f5;
+    }
+
+    .grid-2{ display:grid; gap: var(--gap); }
+    .chips{ display:flex; gap:6px; flex-wrap: wrap; }
+    .chip{
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0)) border-box,
+        linear-gradient(180deg, #0e1b23, #0a141a) padding-box;
+      color:#daecfb; border:1px solid #274156;
+      padding:6px 10px; border-radius: 999px; display:flex; gap:6px; align-items:center;
+    }
+    .chip button{ color:#ffc9c9; }
+
+    .photos{ display:grid; grid-template-columns: repeat(2, 1fr); gap:10px; }
+    .photo{
+      position:relative; border-radius: 14px; overflow:hidden; border:1px solid #274156;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0)) border-box,
+        linear-gradient(180deg, #0e1c25, #0b141a) padding-box;
+      box-shadow: var(--shadow-1);
+    }
+    .photo img{ width:100%; height:160px; object-fit: cover; }
+    .photo .meta{
+      position:absolute; bottom:0; left:0; right:0; padding:6px 8px;
+      background: linear-gradient(180deg, rgba(0,0,0,.0), rgba(0,0,0,.55) 55%, rgba(0,0,0,.7));
+      color:#f3f8fc; font-size:.85rem; display:flex; justify-content:space-between; align-items:center;
+    }
+
+    .summary{ display:grid; gap:10px; }
+    .kpis{ display:grid; grid-template-columns: repeat(2, 1fr); gap:10px; }
+    .kpi{
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,0)) border-box,
+        linear-gradient(180deg, #0f1f29, #0b141a) padding-box;
+      border:1px solid #254257; border-radius: 12px;
+      padding:10px; display:grid; gap:4px; box-shadow: var(--shadow-1);
+    }
+    .kpi h3{ margin:0; font-size:1rem; color: #cfe3f5; font-weight:700; text-shadow: 0 1px 0 rgba(0,0,0,.35); }
+    .kpi .val{ font-size: 1.28rem; font-weight: 800; letter-spacing: .3px; }
+
+    .progress{
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0)) border-box,
+        linear-gradient(180deg, #0b1820, #0a141a) padding-box;
+      border:1px solid #274156; border-radius: 999px; overflow:hidden; height: 12px;
+    }
+    .progress > .bar{ height: 100%; background: linear-gradient(90deg, #22c55e, #10b981); width: 0%; }
+
+    footer{
+      position: fixed; bottom:0; left:0; right:0; z-index:60;
+      background:
+        linear-gradient(180deg, rgba(7,16,21,0), rgba(7,16,21,.88) 35%, rgba(7,16,21,.96));
+      backdrop-filter: blur(10px);
+      border-top: 1px solid var(--outline-2);
+    }
+    .footer-inner{ max-width:1100px; margin: 0 auto; padding: 10px 14px; display:flex; gap:8px; flex-wrap: wrap; }
+    .footer-inner .btn{ flex:1 1 auto; justify-content: center; }
+
+    dialog{
+      width:min(720px, 92vw);
+      border: 1px solid #274156; border-radius: 16px; padding:0;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,0)) border-box,
+        linear-gradient(180deg, #0e1c25, #0b141a) padding-box;
+      color: var(--text); box-shadow: var(--shadow-2);
+    }
+    dialog::backdrop{ backdrop-filter: blur(3px); background: rgba(0,0,0,.45); }
+    .modal-header{ display:flex; align-items:center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #274156; }
+    .modal-body{ padding: 12px 14px; display:grid; gap: 12px; }
+    .modal-actions{ display:flex; gap:8px; justify-content:flex-end; padding: 12px 14px; border-top:1px solid #274156; }
+
+    .share-options{
+      display:grid; gap: 10px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,0)) border-box,
+        linear-gradient(180deg, #0e1b23, #0a141a) padding-box;
+      border:1px solid #274156; border-radius: 12px; padding: 10px;
+    }
+    .share-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .switch{ position: relative; width: 54px; height: 30px; border-radius: 999px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0)) border-box,
+        linear-gradient(180deg, #172632, #111e28) padding-box;
+      border:1px solid #2a455a; }
+    .switch input{ position:absolute; inset:0; opacity:0; }
+    .switch .dot{
+      position:absolute; top:3px; left:3px; width:24px; height:24px; border-radius:50%;
+      background:#ef4444; transition: transform .2s ease, background .2s ease;
+      box-shadow: 0 4px 10px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.08);
+    }
+    .switch input:checked + .dot{ transform: translateX(24px); background:#34d399; }
+
+    .thumbs{ display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; }
+    .thumb{
+      border:1px solid #274156; border-radius: 12px; overflow: hidden; position: relative;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0)) border-box,
+        linear-gradient(180deg, #0e1c25, #0b141a) padding-box;
+    }
+    .thumb img{ width:100%; height:110px; object-fit: cover; display:block; }
+    .thumb .select-row{ display:flex; align-items:center; justify-content: space-between; gap:8px; padding:6px 8px; font-size:.85rem; background: rgba(0,0,0,.28); }
+
+    .preview{ display:grid; gap:6px; }
+    .preview textarea{
+      width:100%; min-height: 160px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0)) border-box,
+        linear-gradient(180deg, #0b1820, #0a141a) padding-box;
+      color:#d7e8f7; border:1px solid #274156; border-radius: 12px; padding:10px; white-space: pre-wrap;
+    }
+
+    .toast{
+      position: fixed; right: 12px; bottom: 86px; z-index: 80;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,0)) border-box,
+        linear-gradient(180deg, #0e1b23, #0a141a) padding-box;
+      border:1px solid #274156; padding: 10px 12px; border-radius: 10px; box-shadow: var(--shadow-1);
+      display:none;
+    }
+    .toast.show{ display:block; animation: fade .2s ease; }
+    @keyframes fade{ from{ opacity:.6; transform: translateY(6px);} to{ opacity:1; transform: translateY(0);} }
+
+    @media (min-width: 768px){
+      main{
+        grid-template-columns: 1.5fr 1fr;
+        grid-template-areas:
+          "grupo resumen"
+          "fecha resumen"
+          "asistencia resumen"
+          "tema resumen"
+          "testimonios resumen"
+          "fotos resumen";
+      }
+      #sec-grupo{ grid-area: grupo; }
+      #sec-fecha{ grid-area: fecha; }
+      #sec-asistencia{ grid-area: asistencia; }
+      #sec-tema{ grid-area: tema; }
+      #sec-testimonios{ grid-area: testimonios; }
+      #sec-fotos{ grid-area: fotos; }
+      aside.summary{ grid-area: resumen; position: sticky; top: 70px; align-self: start; }
+      .photos{ grid-template-columns: repeat(3, 1fr); }
+      .kpis{ grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .sr-only{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0; }
+    .danger-text{ color:#ffc1c1; }
+  </style>
+</head>
+<body>
+  <header role="banner" aria-label="Barra superior">
+    <div class="header-inner">
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <h1>Reportes de Grupo de Amistad</h1>
+      </div>
+      <div class="header-actions" role="group" aria-label="Acciones principales">
+        <!-- Importante: ya no está hidden; se muestra siempre con fallback de instrucciones -->
+        <button id="btnInstall" class="btn" type="button" aria-label="Instalar aplicación">📲 Instalar</button>
+        <button id="btnBackup" class="btn secondary" type="button" aria-label="Respaldar datos">💾 Respaldo</button>
+        <button id="btnRestore" class="btn ghost" type="button" aria-label="Restaurar datos">📁 Restaurar</button>
+      </div>
+    </div>
+  </header>
+
+  <main role="main">
+    <section id="sec-grupo" class="group-card" aria-labelledby="titulo-grupo">
+      <h2 id="titulo-grupo">Información del Grupo</h2>
+      <div class="group-row">
+        <div class="inline" aria-live="polite" aria-atomic="true">
+          <span class="tag" title="Nombre del grupo">Grupo: <strong id="groupNameView">—</strong></span>
+          <span class="tag" title="Nombre del líder">Líder: <strong id="leaderNameView">—</strong></span>
+        </div>
+        <div class="inline">
+          <button id="btnEditGroup" class="btn" type="button" aria-haspopup="dialog" aria-controls="modalGrupo">✏️ Editar</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="sec-fecha" aria-labelledby="titulo-fecha">
+      <h2 id="titulo-fecha">Reunión</h2>
+      <div class="week-bar">
+        <div class="row">
+          <label for="meetingDate"><strong>Fecha</strong></label>
+          <input id="meetingDate" type="date" aria-describedby="fecha-hint" />
+        </div>
+        <p id="fecha-hint" class="muted">Selecciona la fecha de la reunión. Los datos se guardan por fecha.</p>
+        <div class="row">
+          <button id="btnPrevDay" class="btn secondary" type="button" aria-label="Día anterior">⟵ Anterior</button>
+          <button id="btnToday" class="btn ghost" type="button" aria-label="Ir a hoy">📅 Hoy</button>
+          <button id="btnNextDay" class="btn secondary" type="button" aria-label="Día siguiente">Siguiente ⟶</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="sec-asistencia" aria-labelledby="titulo-asistencia">
+      <h2 id="titulo-asistencia">Asistencia</h2>
+      <div class="add-row" role="group" aria-label="Agregar persona">
+        <input id="newMemberInput" type="text" placeholder="Nombre de la persona" aria-label="Nombre de la persona nueva" />
+        <button id="btnAddMember" class="btn success" type="button">➕ Agregar</button>
+      </div>
+      <div class="members" id="membersList" role="list" aria-label="Lista de personas"></div>
+    </section>
+
+    <section id="sec-tema" class="grid-2" aria-labelledby="titulo-tema">
+      <h2 id="titulo-tema" class="sr-only">Tema & Ofrenda</h2>
+      <article class="card alt" aria-labelledby="titulo-tema-semana">
+        <h2 id="titulo-tema-semana">Tema de la semana</h2>
+        <input id="weeklyTopic" type="text" placeholder="Escribe el tema o tópico de la semana" aria-label="Tema de la semana" />
+      </article>
+      <article class="card alt" aria-labelledby="titulo-ofrenda">
+        <h2 id="titulo-ofrenda">Ofrenda</h2>
+        <div class="inline"><span class="tag">Moneda: <strong>EUR</strong></span></div>
+        <input id="offering" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00" aria-label="Monto de la ofrenda en euros" />
+      </article>
+    </section>
+
+    <section id="sec-testimonios" class="grid-2" aria-labelledby="titulo-testimonios-visitas">
+      <h2 id="titulo-testimonios-visitas" class="sr-only">Testimonios y Visitas</h2>
+      <article class="card" aria-labelledby="titulo-testimonios">
+        <h2 id="titulo-testimonios">Testimonios</h2>
+        <div class="add-row">
+          <input id="newTestimonyInput" type="text" placeholder="Escribe un testimonio y presiona Agregar" aria-label="Nuevo testimonio" />
+          <button id="btnAddTestimony" class="btn success" type="button">➕ Agregar</button>
+        </div>
+        <div class="chips" id="testimoniesList" role="list" aria-label="Lista de testimonios"></div>
+      </article>
+      <article class="card" aria-labelledby="titulo-visitas">
+        <h2 id="titulo-visitas">Nuevas visitas</h2>
+        <div class="add-row">
+          <input id="newVisitorInput" type="text" placeholder="Nombre de la visita" aria-label="Nombre de la nueva visita" />
+          <button id="btnAddVisitor" class="btn success" type="button">➕ Agregar</button>
+        </div>
+        <div class="chips" id="visitorsList" role="list" aria-label="Lista de nuevas visitas"></div>
+      </article>
+    </section>
+
+    <section id="sec-fotos" aria-labelledby="titulo-fotos">
+      <h2 id="titulo-fotos">Fotos</h2>
+      <div class="add-row">
+        <input id="photoCaption" type="text" placeholder="Descripción (opcional)" aria-label="Descripción de la foto" />
+        <label for="photoInput" class="btn secondary" role="button" aria-label="Tomar o subir foto">📷 Tomar/Subir</label>
+        <input id="photoInput" type="file" accept="image/*" capture="environment" class="sr-only" />
+      </div>
+      <div class="photos" id="photosGrid" aria-live="polite" aria-label="Galería de fotos"></div>
+    </section>
+
+    <aside class="summary" aria-labelledby="titulo-resumen">
+      <h2 id="titulo-resumen">Resumen de la reunión</h2>
+      <div class="kpis" role="group" aria-label="Indicadores clave">
+        <div class="kpi"><h3>Asistentes</h3><div class="val" id="kpiPresent">0</div><div class="muted">Presentes</div></div>
+        <div class="kpi"><h3>Ausentes</h3><div class="val" id="kpiAbsent">0</div><div class="muted">Miembros no presentes</div></div>
+        <div class="kpi"><h3>Ofrenda</h3><div class="val" id="kpiOffering">€0,00</div><div class="muted">Total del día</div></div>
+        <div class="kpi"><h3>Visitas</h3><div class="val" id="kpiVisitors">0</div><div class="muted">Nuevos invitados</div></div>
+      </div>
+      <div>
+        <div class="inline" style="justify-content:space-between; margin-bottom:6px;">
+          <span class="muted">Asistencia (%)</span><strong id="pctLabel">0%</strong>
+        </div>
+        <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Porcentaje de asistencia">
+          <div class="bar" id="pctBar" style="width: 0%;"></div>
+        </div>
+      </div>
+      <div class="card alt" aria-live="polite" aria-atomic="true">
+        <h2 class="sr-only">Resumen textual</h2>
+        <p class="muted" id="summaryText">No hay datos de la reunión aún.</p>
+      </div>
+    </aside>
+  </main>
+
+  <footer role="contentinfo">
+    <div class="footer-inner">
+      <button id="btnShare" class="btn" type="button" aria-label="Compartir con otras apps">📤 Compartir</button>
+      <button id="btnShareWA" class="btn success" type="button" aria-label="Compartir por WhatsApp">🟢 WhatsApp</button>
+      <button id="btnClearDay" class="btn warning" type="button" aria-label="Limpiar datos del día">🧹 Limpiar día</button>
+    </div>
+  </footer>
+
+  <!-- Modal edición -->
+  <dialog id="modalGrupo" role="dialog" aria-labelledby="modalGrupoTitle" aria-modal="true">
+    <div class="modal-header">
+      <h3 id="modalGrupoTitle" style="margin:0;">Editar información del grupo</h3>
+      <button class="btn ghost" type="button" data-close>✖</button>
+    </div>
+    <div class="modal-body">
+      <label for="inpGroupName">Nombre del grupo</label>
+      <input id="inpGroupName" type="text" placeholder="Ej. GA Jóvenes Norte" />
+      <label for="inpLeaderName">Nombre del líder</label>
+      <input id="inpLeaderName" type="text" placeholder="Ej. María Pérez" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" type="button" data-close>Cancelar</button>
+      <button id="btnSaveGroup" class="btn" type="button">💾 Guardar</button>
+    </div>
+  </dialog>
+
+  <!-- Modal compartir -->
+  <dialog id="modalShare" role="dialog" aria-labelledby="modalShareTitle" aria-modal="true">
+    <div class="modal-header">
+      <h3 id="modalShareTitle" style="margin:0;">Compartir reporte</h3>
+      <button class="btn ghost" type="button" data-close>✖</button>
+    </div>
+    <div class="modal-body">
+      <div class="share-options" aria-labelledby="shareOptionsTitle">
+        <div class="share-row"><strong id="shareOptionsTitle">Opciones</strong></div>
+        <div class="share-row">
+          <label class="inline" for="chkIncludePhoto" style="gap:10px;">
+            <span class="switch" aria-hidden="true">
+              <input id="chkIncludePhoto" type="checkbox" />
+              <span class="dot"></span>
+            </span>
+            <span>Incluir foto como imagen-resumen (foto + informe en la misma imagen).</span>
+          </label>
+        </div>
+        <div id="photoPicker" class="thumbs" aria-label="Seleccionar foto a adjuntar"></div>
+      </div>
+
+      <div class="preview">
+        <label for="txtPreview"><strong>Vista previa del mensaje</strong></label>
+        <textarea id="txtPreview" readonly aria-label="Vista previa del mensaje"></textarea>
+        <p class="muted">Si WhatsApp ignora el texto con archivo, la imagen-resumen ya incluye todo el informe.</p>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" type="button" id="btnCopyMsg">📋 Copiar texto</button>
+      <span style="flex:1"></span>
+      <button class="btn" type="button" id="btnShareGeneric">📤 Otras apps</button>
+      <button class="btn success" type="button" id="btnShareWhatsApp">🟢 WhatsApp</button>
+    </div>
+  </dialog>
+
+  <!-- Modal AYUDA INSTALAR (si no hay prompt nativo) -->
+  <dialog id="modalInstallHelp" role="dialog" aria-labelledby="installHelpTitle" aria-modal="true">
+    <div class="modal-header">
+      <h3 id="installHelpTitle" style="margin:0;">Instalar esta aplicación</h3>
+      <button class="btn ghost" type="button" data-close>✖</button>
+    </div>
+    <div class="modal-body" id="installHelpBody">
+      <!-- Se rellena dinámicamente con pasos para iOS/Android/Escritorio -->
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" type="button" data-close>Entendido</button>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true">Guardado</div>
+
+  <script>
+    const $ = (sel, root=document) => root.querySelector(sel);
+    const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+    const fmtCurrency = (n) => new Intl.NumberFormat('es-ES', { style:'currency', currency:'EUR' }).format(Number(n||0));
+    const todayISO = () => new Date().toISOString().slice(0,10);
+    const showToast = (msg="Guardado") => { const el = $("#toast"); el.textContent = msg; el.classList.add("show"); setTimeout(() => el.classList.remove("show"), 1800); };
+    const escapeHtml = (s) => String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+
+    const STORAGE_KEY = "synthweaver-ga-app-state-v1";
+    const defaultState = () => ({
+      version: 6,
+      group: { name: "Grupo de Amistad", leader: "Nombre del Líder" },
+      members: [],
+      photos: [],
+      weeks: {},
+      currentDate: todayISO()
+    });
+    const state = loadState();
+    function loadState(){
+      try{
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if(!raw) return defaultState();
+        const obj = JSON.parse(raw);
+        if(!obj.weeks) obj.weeks = {};
+        if(!obj.photos) obj.photos = [];
+        if(!obj.group) obj.group = { name: "Grupo de Amistad", leader: "Nombre del Líder" };
+        if(!obj.currentDate) obj.currentDate = todayISO();
+        if(!obj.members) obj.members = [];
+        obj.version = 6;
+        return obj;
+      }catch(e){
+        console.warn("Error cargando estado, usando por defecto:", e);
+        return defaultState();
+      }
+    }
+    const saveState = debounce(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); showToast("Guardado"); renderSummary(); }, 250);
+    function debounce(fn, delay=200){ let t; return (...args)=>{ clearTimeout(t); t = setTimeout(()=>fn(...args), delay); }; }
+    function ensureWeek(dateISO){
+      if(!state.weeks[dateISO]){
+        state.weeks[dateISO] = { date: dateISO, topic: "", offering: "", testimonies: [], visitors: [], attendance: {} };
+      }
+      return state.weeks[dateISO];
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      $("#meetingDate").value = state.currentDate;
+      updateGroupTags();
+      renderAllForDate(state.currentDate);
+      bindEvents();
+      setupPWA();
+    });
+
+    function updateGroupTags(){
+      $("#groupNameView").textContent = state.group.name || "—";
+      $("#leaderNameView").textContent = state.group.leader || "—";
+    }
+    function renderAllForDate(dateISO){
+      const week = ensureWeek(dateISO);
+      renderMembers();
+      $("#weeklyTopic").value = week.topic || "";
+      $("#offering").value = week.offering || "";
+      renderChipsList(week.testimonies, $("#testimoniesList"), "testimony");
+      renderChipsList(week.visitors, $("#visitorsList"), "visitor");
+      renderPhotos();
+      renderSummary();
+    }
+
+    function renderMembers(){
+      const list = $("#membersList"); list.innerHTML = "";
+      const dateISO = state.currentDate; const week = ensureWeek(dateISO);
+      const members = [...state.members].filter(m => m.active !== false).sort((a,b) => a.name.localeCompare(b.name, 'es'));
+      if(members.length === 0){
+        const empty = document.createElement("div"); empty.className = "muted"; empty.textContent = "Agrega personas para registrar asistencia."; list.appendChild(empty); return;
+      }
+      members.forEach(m => {
+        const present = !!week.attendance[m.id];
+        const item = document.createElement("div"); item.className = "member-item"; item.setAttribute("role","listitem");
+        const name = document.createElement("div"); name.className = "member-name"; name.textContent = m.name;
+        const right = document.createElement("div"); right.className = "presence-toggle";
+        const status = document.createElement("span"); status.className = "status-label"; status.textContent = present ? "Presente" : "Ausente"; status.style.color = present ? "#d6fff0" : "#ffd3d3";
+        const toggle = document.createElement("button");
+        toggle.className = "toggle"; toggle.type = "button"; toggle.setAttribute("role","switch");
+        toggle.setAttribute("aria-checked", present ? "true" : "false"); toggle.dataset.pressed = present ? "true" : "false";
+        toggle.title = present ? "Marcar como ausente" : "Marcar como presente"; toggle.setAttribute("aria-label", `Asistencia de ${m.name}`);
+        const knob = document.createElement("div"); knob.className = "knob"; toggle.appendChild(knob);
+        toggle.addEventListener("click", () => { week.attendance[m.id] = !week.attendance[m.id]; saveState(); renderMembers(); });
+        const btnDel = document.createElement("button"); btnDel.className = "btn danger"; btnDel.type = "button"; btnDel.textContent = "Eliminar";
+        btnDel.setAttribute("aria-label", `Eliminar ${m.name} de la lista`);
+        btnDel.addEventListener("click", () => { if(confirm(`¿Eliminar a "${m.name}" de la lista?`)){ m.active = false; saveState(); renderMembers(); } });
+        right.appendChild(status); right.appendChild(toggle); right.appendChild(btnDel);
+        item.appendChild(name); item.appendChild(right); list.appendChild(item);
+      });
+      renderSummary();
+    }
+    function addMember(name){
+      const trimmed = (name||"").trim(); if(!trimmed) return;
+      const id = "m_" + Math.random().toString(36).slice(2,10);
+      state.members.push({ id, name: trimmed, active: true });
+      saveState(); $("#newMemberInput").value = ""; $("#newMemberInput").focus(); renderMembers();
+    }
+
+    function renderChipsList(arr, root, type){
+      root.innerHTML = "";
+      if(!Array.isArray(arr) || arr.length === 0){
+        const empty = document.createElement("div"); empty.className = "muted";
+        empty.textContent = type === "testimony" ? "Sin testimonios registrados." : "Sin nuevas visitas registradas.";
+        root.appendChild(empty); return;
+      }
+      arr.forEach((txt, idx) => {
+        const chip = document.createElement("div"); chip.className = "chip"; chip.setAttribute("role","listitem");
+        chip.innerHTML = `<span>${escapeHtml(txt)}</span>`;
+        const del = document.createElement("button"); del.className = "btn ghost danger-text"; del.type = "button"; del.setAttribute("aria-label", "Eliminar elemento"); del.textContent = "✖";
+        del.addEventListener("click", () => { arr.splice(idx,1); saveState(); renderChipsList(arr, root, type); });
+        chip.appendChild(del); root.appendChild(chip);
+      });
+      renderSummary();
+    }
+
+    function renderPhotos(){
+      const grid = $("#photosGrid"); grid.innerHTML = "";
+      if(state.photos.length === 0){ const empty = document.createElement("div"); empty.className = "muted"; empty.textContent = "Aún no hay fotos."; grid.appendChild(empty); return; }
+      state.photos.slice().reverse().forEach((ph) => {
+        const card = document.createElement("div"); card.className = "photo";
+        const img = document.createElement("img"); img.src = ph.dataURL; img.alt = ph.caption ? `Foto: ${ph.caption}` : "Foto del grupo";
+        const meta = document.createElement("div"); meta.className = "meta";
+        const left = document.createElement("span"); left.textContent = ph.caption || "Sin descripción";
+        const right = document.createElement("div"); right.className = "inline";
+        const btnSharePic = document.createElement("button"); btnSharePic.className = "btn ghost"; btnSharePic.type = "button"; btnSharePic.textContent = "📤"; btnSharePic.title = "Compartir foto";
+        btnSharePic.addEventListener("click", async () => { await sharePhoto(ph); });
+        const btnDel = document.createElement("button"); btnDel.className = "btn ghost"; btnDel.type = "button"; btnDel.textContent = "🗑️"; btnDel.title = "Eliminar foto";
+        btnDel.addEventListener("click", () => { if(confirm("¿Eliminar esta foto?")){ const idx = state.photos.findIndex(p => p.id === ph.id); if(idx >= 0){ state.photos.splice(idx,1); saveState(); renderPhotos(); } } });
+        right.appendChild(btnSharePic); right.appendChild(btnDel);
+        meta.appendChild(left); meta.appendChild(right);
+        card.appendChild(img); card.appendChild(meta); grid.appendChild(card);
+      });
+    }
+    async function sharePhoto(ph){
+      try{
+        const res = await fetch(ph.dataURL); const blob = await res.blob();
+        const file = new File([blob], `foto-${ph.id}.png`, { type: blob.type || "image/png" });
+        if(navigator.share && navigator.canShare && navigator.canShare({ files:[file] })){
+          await navigator.share({ files:[file], title: state.group.name + " - Foto", text: ph.caption || "Foto del grupo" });
+        }else{
+          const url = URL.createObjectURL(blob); window.open(url, "_blank", "noopener"); setTimeout(()=>URL.revokeObjectURL(url), 10000);
+          alert("Se abrió la imagen en otra pestaña. Desde ahí puedes descargarla o compartirla.");
+        }
+      }catch(e){ console.error(e); alert("No se pudo compartir la foto."); }
+    }
+
+    function renderSummary(){
+      const dateISO = state.currentDate; const week = ensureWeek(dateISO);
+      const activeMembers = state.members.filter(m => m.active !== false);
+      const total = activeMembers.length;
+      const presents = activeMembers.filter(m => !!week.attendance[m.id]).length;
+      const absents = Math.max(0, total - presents);
+      const offering = Number(week.offering || 0);
+      const visitors = week.visitors?.length || 0;
+      $("#kpiPresent").textContent = String(presents);
+      $("#kpiAbsent").textContent = String(absents);
+      $("#kpiOffering").textContent = fmtCurrency(offering);
+      $("#kpiVisitors").textContent = String(visitors);
+      const pct = total > 0 ? Math.round((presents/total)*100) : 0;
+      $("#pctLabel").textContent = pct + "%";
+      $("#pctBar").style.width = pct + "%";
+      $("#pctBar").parentElement.setAttribute("aria-valuenow", String(pct));
+      const summary = [
+        `Grupo: ${state.group.name} · Líder: ${state.group.leader}`,
+        `Fecha: ${dateISO}`,
+        `Tema: ${week.topic || "—"}`,
+        `Asistencia: ${presents}/${total} (${pct}%)`,
+        `Ofrenda: ${fmtCurrency(offering)}`,
+        `Testimonios: ${week.testimonies?.length || 0}`,
+        `Nuevas visitas: ${visitors}`
+      ].join("\n");
+      $("#summaryText").textContent = summary;
+    }
+
+    function buildShareTextFancy(){
+      const dateISO = state.currentDate;
+      const week = ensureWeek(dateISO);
+      const activeMembers = state.members.filter(m => m.active !== false);
+      const total = activeMembers.length;
+      const presents = activeMembers.filter(m => !!week.attendance[m.id]).length;
+      const pct = total > 0 ? Math.round((presents/total)*100) : 0;
+      const presentNames = activeMembers.filter(m => !!week.attendance[m.id]).map(m => m.name);
+      const absentNames = activeMembers.filter(m => !week.attendance[m.id]).map(m => m.name);
+      const visitors = week.visitors || []; const testimonies = week.testimonies || [];
+      const line = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
+      const title = "🕊️ *REPORTE DE GRUPO DE AMISTAD*";
+      const head = [`👥 *Grupo:* ${state.group.name}`, `👤 *Líder:* ${state.group.leader}`, `📅 *Fecha:* ${dateISO}`, `🎯 *Tema:* ${week.topic ? week.topic : "—"}`].join("\n");
+      const attendance = [`✅ *Asistencia:* ${presents}/${total} (${pct}%)`,
+        presentNames.length ? `   • *Presentes (${presentNames.length}):* ${presentNames.join(", ")}` : `   • *Presentes:* —`,
+        absentNames.length ? `   • *Ausentes (${absentNames.length}):* ${absentNames.join(", ")}` : `   • *Ausentes:* —`
+      ].join("\n");
+      const money = `💒 *Ofrenda:* ${fmtCurrency(week.offering || 0)}`;
+      const guests = visitors.length ? `🆕 *Visitas (${visitors.length}):*\n${visitors.map(v => `   • ${v}`).join("\n")}` : `🆕 *Visitas:* —`;
+      const testis = testimonies.length ? `🙌 *Testimonios (${testimonies.length}):*\n${testimonies.map(t => `   • ${t}`).join("\n")}` : `🙌 *Testimonios:* —`;
+      const footer = "_Gracias por su servicio y fidelidad. Dios les bendiga._";
+      return [ title, line, head, line, attendance, money, line, guests, testis, line, footer ].join("\n");
+    }
+
+    async function composeReportPoster(photoDataURL, text){
+      const W = 1080; const M = 48; const R = 36; const pad = 24; const gap = 28;
+      const img = await loadImage(photoDataURL);
+      const m = document.createElement("canvas"); const mctx = m.getContext("2d");
+      const fontTitle = '700 54px "Segoe UI", Roboto, Arial, sans-serif';
+      const fontMeta  = '600 34px "Segoe UI", Roboto, Arial, sans-serif';
+      const fontBody  = '400 36px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji","Segoe UI", Roboto, Arial, sans-serif';
+      mctx.font = fontBody;
+      const cardW = W - M*2; const photoW = cardW - pad*2;
+      const ratio = img.width ? (img.height / img.width) : (3/4);
+      const photoH = Math.min(Math.round(photoW * ratio), 780);
+      const week = ensureWeek(state.currentDate);
+      const headerLines = [
+        `Grupo: ${state.group.name} • Líder: ${state.group.leader}`,
+        `Fecha: ${state.currentDate} • Tema: ${week.topic || "—"}`
+      ];
+      const headerWrapped = headerLines.flatMap(line => wrapText(mctx, line, cardW - pad*2));
+      const bodyWrapped = wrapText(mctx, text, cardW - pad*2);
+      const titleH = 64; const headerH = headerWrapped.length * 44 + 8; const bodyH = bodyWrapped.length * 46 + 8;
+      const H = M + titleH + gap + photoH + gap + headerH + gap/2 + bodyH + M;
+      const c = document.createElement("canvas"); c.width = W; c.height = H; const ctx = c.getContext("2d");
+      const gBg = ctx.createLinearGradient(0,0,W,H); gBg.addColorStop(0, "#0a222b"); gBg.addColorStop(1, "#0a1116"); ctx.fillStyle = gBg; ctx.fillRect(0,0,W,H);
+      const cardX = M, cardY = M, cardH = H - M*2;
+      roundedRect(ctx, cardX, cardY, cardW, cardH, R);
+      const gCard = ctx.createLinearGradient(cardX, cardY, cardX, cardY + cardH); gCard.addColorStop(0, "#0f1f29"); gCard.addColorStop(1, "#0b141a"); ctx.fillStyle = gCard; ctx.fill();
+      ctx.save(); ctx.font = fontTitle; ctx.fillStyle = "#eaf3f9"; ctx.textBaseline = "top"; ctx.fillText("Reporte de Grupo de Amistad", cardX + pad, cardY + 10); ctx.restore();
+      const px = cardX + pad; const py = cardY + 10 + titleH + 12;
+      drawRoundedImage(ctx, img, px, py, photoW, photoH, 28);
+      let y = py + photoH + gap; ctx.font = fontMeta; ctx.fillStyle = "#cfe3f5"; headerWrapped.forEach(line => { ctx.fillText(line, cardX + pad, y); y += 44; });
+      y += 6; ctx.globalAlpha = .26; ctx.fillStyle = "#cfe3f5"; ctx.fillRect(cardX + pad, y, cardW - pad*2, 2); ctx.globalAlpha = 1; y += gap/2;
+      ctx.font = fontBody; ctx.fillStyle = "#d7e8f7"; bodyWrapped.forEach(line => { ctx.fillText(line, cardX + pad, y); y += 46; });
+      y += 8; ctx.globalAlpha = .6; ctx.font = '600 28px "Segoe UI", Roboto, Arial, sans-serif'; ctx.fillStyle = "#9fb0c0"; ctx.fillText("GA Reportes", cardX + pad, y); ctx.globalAlpha = 1;
+      const blob = await canvasToBlob(c, "image/png", 0.96);
+      return new File([blob], `reporte-${state.currentDate}.png`, { type: "image/png" });
+    }
+    function wrapText(ctx, text, maxWidth){
+      const words = (text || "").split(/\s+/); const lines = []; let line = "";
+      for(const w of words){
+        const test = line ? (line + " " + w) : w;
+        if(ctx.measureText(test).width <= maxWidth){ line = test; }
+        else{
+          if(line) lines.push(line);
+          if(ctx.measureText(w).width > maxWidth){
+            let chunk = ""; for(const ch of w){ const t2 = chunk + ch; if(ctx.measureText(t2).width <= maxWidth) chunk = t2; else { lines.push(chunk); chunk = ch; } } line = chunk;
+          }else{ line = w; }
+        }
+      }
+      if(line) lines.push(line); return lines;
+    }
+    function roundedRect(ctx, x,y,w,h,r){ const rr = Math.min(r, w/2, h/2); ctx.beginPath(); ctx.moveTo(x+rr, y); ctx.arcTo(x+w, y, x+w, y+h, rr); ctx.arcTo(x+w, y+h, x, y+h, rr); ctx.arcTo(x, y+h, x, y, rr); ctx.arcTo(x, y, x+w, y, rr); ctx.closePath(); }
+    function coverFit(srcW, srcH, destW, destH){ const srcRatio = srcW / srcH, destRatio = destW / destH; let sW, sH; if(srcRatio > destRatio){ sH = srcH; sW = destRatio * sH; } else { sW = srcW; sH = sW / destRatio; } const sx = (srcW - sW) / 2, sy = (srcH - sH) / 2; return { sx, sy, sWidth: sW, sHeight: sH }; }
+    function drawRoundedImage(ctx, img, x,y,w,h,r=20){ ctx.save(); roundedRect(ctx, x,y,w,h,r); ctx.clip(); const { sx, sy, sWidth, sHeight } = coverFit(img.width, img.height, w, h); ctx.drawImage(img, sx, sy, sWidth, sHeight, x, y, w, h); ctx.restore(); }
+    function loadImage(src){ return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.decoding = "async"; i.src = src; }); }
+    function canvasToBlob(canvas, type="image/png", quality=0.96){ return new Promise((res)=>canvas.toBlob(b=>res(b), type, quality)); }
+
+    let selectedPhotoId = null;
+    function openShareModal(){
+      $("#txtPreview").value = buildShareTextFancy();
+      const picker = $("#photoPicker"); picker.innerHTML = "";
+      const photos = state.photos.slice().reverse(); const hasPhotos = photos.length > 0;
+      const chk = $("#chkIncludePhoto"); chk.checked = hasPhotos; chk.disabled = !hasPhotos;
+      if(hasPhotos){
+        const todayPhoto = photos.find(p => p.date === state.currentDate);
+        selectedPhotoId = (todayPhoto || photos[0]).id;
+        photos.slice(0, 9).forEach(ph => {
+          const cell = document.createElement("div"); cell.className = "thumb";
+          const img = document.createElement("img"); img.src = ph.dataURL; img.alt = ph.caption ? `Foto: ${ph.caption}` : "Foto del grupo";
+          const row = document.createElement("div"); row.className = "select-row";
+          const cap = document.createElement("span"); cap.textContent = ph.caption || "Sin descripción"; cap.style.whiteSpace = "nowrap"; cap.style.overflow = "hidden"; cap.style.textOverflow = "ellipsis";
+          const rb = document.createElement("input"); rb.type = "radio"; rb.name = "sharePhoto"; rb.value = ph.id; rb.checked = ph.id === selectedPhotoId; rb.setAttribute("aria-label", "Seleccionar esta foto");
+          rb.addEventListener("change", () => selectedPhotoId = ph.id);
+          row.appendChild(cap); row.appendChild(rb); cell.appendChild(img); cell.appendChild(row); picker.appendChild(cell);
+        });
+      }else{
+        const empty = document.createElement("div"); empty.className = "muted"; empty.textContent = "No hay fotos para adjuntar."; picker.appendChild(empty); selectedPhotoId = null;
+      }
+      $("#modalShare").showModal();
+    }
+
+    async function shareViaWhatsApp(){
+      const text = buildShareTextFancy();
+      const includePhoto = $("#chkIncludePhoto").checked;
+      if(includePhoto && selectedPhotoId){
+        const ph = state.photos.find(p => p.id === selectedPhotoId);
+        if(ph){
+          try{
+            const poster = await composeReportPoster(ph.dataURL, text);
+            if(navigator.share && navigator.canShare && navigator.canShare({ files:[poster] })){
+              await navigator.share({ title: `Reporte ${state.group.name} (${state.currentDate})`, text, files: [poster] });
+              $("#modalShare").close(); showToast("Compartido"); return;
+            }else{
+              const url = URL.createObjectURL(poster); window.open(url, "_blank", "noopener"); setTimeout(()=>URL.revokeObjectURL(url), 12000);
+              const wa = "https://wa.me/?text=" + encodeURIComponent(text);
+              setTimeout(()=>window.open(wa, "_blank", "noopener"), 600);
+              $("#modalShare").close();
+              alert("Se generó la imagen-resumen (foto + informe). Descárgala y envíala por WhatsApp. El texto también se abrió listo para enviar.");
+              return;
+            }
+          }catch(e){ console.warn("Fallo generando poster, se enviará solo texto:", e); }
+        }
+      }
+      const waUrl = "https://wa.me/?text=" + encodeURIComponent(text);
+      window.open(waUrl, "_blank", "noopener");
+      $("#modalShare").close();
+    }
+
+    async function shareViaGeneric(){
+      const text = buildShareTextFancy();
+      const includePhoto = $("#chkIncludePhoto").checked;
+      try{
+        if(includePhoto && selectedPhotoId){
+          const ph = state.photos.find(p => p.id === selectedPhotoId);
+          if(ph){
+            const poster = await composeReportPoster(ph.dataURL, text);
+            if(navigator.share && navigator.canShare && navigator.canShare({ files:[poster], text })){
+              await navigator.share({ title: `Reporte ${state.group.name} (${state.currentDate})`, text, files:[poster] });
+              $("#modalShare").close(); showToast("Compartido"); return;
+            }
+          }
+        }
+        if(navigator.share){
+          await navigator.share({ title: `Reporte ${state.group.name} (${state.currentDate})`, text });
+          $("#modalShare").close(); showToast("Compartido"); return;
+        }
+        await navigator.clipboard.writeText(text);
+        $("#modalShare").close();
+        alert("El mensaje se copió al portapapeles. Pégalo en la app donde quieras compartir.");
+      }catch(e){
+        console.warn("Error al compartir:", e);
+        try{ await navigator.clipboard.writeText(text); alert("No se pudo abrir el diálogo de compartir. El texto del reporte se copió al portapapeles."); $("#modalShare").close(); }catch(_){}
+      }
+    }
+
+    // NUEVO: Respaldo robusto
+    async function backupData(){
+      try{
+        const data = JSON.stringify(state, null, 2);
+        const blob = new Blob([data], {type: "application/json"});
+        const defaultName = `respaldo-ga-${new Date().toISOString().replace(/[:.]/g,'-')}.json`;
+
+        if(window.showSaveFilePicker){
+          const handle = await window.showSaveFilePicker({
+            suggestedName: defaultName,
+            types: [{ description: "JSON", accept: { "application/json": [".json"] } }]
+          });
+          const writable = await handle.createWritable();
+          await writable.write(blob); await writable.close();
+          showToast("Respaldo guardado");
+          return;
+        }
+
+        // Descarga tradicional
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a"); a.href = url; a.download = defaultName;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(()=>URL.revokeObjectURL(url), 5000);
+
+        // iOS Safari (por si la descarga no inicia)
+        setTimeout(() => {
+          // Si la pestaña no perdió el foco, probablemente no descargó (heurística simple)
+          if(document.hasFocus()){
+            const dataUrl = "data:application/json;charset=utf-8," + encodeURIComponent(data);
+            window.open(dataUrl, "_blank", "noopener");
+            alert("Si no se descargó el archivo, en la pestaña que se abrió usa Compartir > Guardar en Archivos.");
+          }
+        }, 800);
+      }catch(e){
+        console.warn(e);
+        alert("No se pudo crear el respaldo.");
+      }
+    }
+
+    // NUEVO: Restaurar robusto
+    async function restoreData(){
+      try{
+        if(window.showOpenFilePicker){
+          const [fileHandle] = await window.showOpenFilePicker({
+            multiple: false,
+            types: [{ description: "JSON", accept: { "application/json": [".json"] } }]
+          });
+          const file = await fileHandle.getFile();
+          await importBackupFile(file);
+          return;
+        }
+        const inp = document.createElement("input"); inp.type = "file"; inp.accept = "application/json";
+        inp.addEventListener("change", async (e) => {
+          const file = e.target.files?.[0]; if(!file) return;
+          await importBackupFile(file);
+        });
+        inp.click();
+      }catch(e){
+        console.warn(e);
+        alert("No se pudo abrir el archivo de respaldo.");
+      }
+    }
+
+    async function importBackupFile(file){
+      try{
+        const text = await file.text();
+        const data = JSON.parse(text);
+        if(!data || typeof data !== "object" || !("weeks" in data) || !("members" in data) || !("photos" in data)){
+          throw new Error("Archivo inválido");
+        }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        // Reemplazar el contenido del objeto state
+        Object.keys(state).forEach(k => delete state[k]);
+        Object.assign(state, data);
+        updateGroupTags();
+        $("#meetingDate").value = state.currentDate || todayISO();
+        renderAllForDate(state.currentDate);
+        showToast("Datos restaurados");
+      }catch(err){
+        console.error(err);
+        alert("No se pudo restaurar el respaldo. Verifica el archivo.");
+      }
+    }
+
+    // NUEVO: Instalar con fallback a instrucciones
+    let deferredPrompt = null;
+    function openInstallHelp(){
+      const body = $("#installHelpBody");
+      const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+      const isAndroid = /android/i.test(navigator.userAgent);
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+      const stepsIOS = `
+        <p>En iPhone/iPad:</p>
+        <ol>
+          <li>Pulsa el botón Compartir (cuadro con flecha hacia arriba).</li>
+          <li>Elige “Añadir a pantalla de inicio”.</li>
+          <li>Confirma en la esquina superior derecha.</li>
+        </ol>`;
+      const stepsAndroid = `
+        <p>En Android (Chrome):</p>
+        <ol>
+          <li>Toca el menú ⋮ en la esquina superior derecha.</li>
+          <li>Elige “Añadir a pantalla principal”.</li>
+          <li>Confirma para instalar la app.</li>
+        </ol>`;
+      const stepsDesktop = `
+        <p>En escritorio (Chrome/Edge):</p>
+        <ol>
+          <li>Busca el ícono de “Instalar” en la barra de direcciones (un + o un monitor con flecha).</li>
+          <li>Haz click y confirma la instalación.</li>
+        </ol>`;
+
+      let html = `<p class="muted">No se pudo abrir el diálogo de instalación automático. Sigue estos pasos:</p>`;
+      if(isStandalone){
+        html = `<p>La app ya está instalada en tu dispositivo.</p>`;
+      }else if(isIOS){ html += stepsIOS; }
+      else if(isAndroid){ html += stepsAndroid; }
+      else { html += stepsDesktop; }
+      body.innerHTML = html;
+      $("#modalInstallHelp").showModal();
+    }
+
+    function bindEvents(){
+      // Editar grupo
+      $("#btnEditGroup").addEventListener("click", () => {
+        $("#inpGroupName").value = state.group.name || "";
+        $("#inpLeaderName").value = state.group.leader || "";
+        $("#modalGrupo").showModal();
+      });
+      $$('[data-close]').forEach(b => b.addEventListener("click", (e) => e.target.closest("dialog")?.close()));
+      $("#btnSaveGroup").addEventListener("click", () => {
+        state.group.name = $("#inpGroupName").value.trim() || "Grupo de Amistad";
+        state.group.leader = $("#inpLeaderName").value.trim() || "Nombre del Líder";
+        updateGroupTags(); saveState(); $("#modalGrupo").close();
+      });
+
+      // Fecha
+      $("#meetingDate").addEventListener("change", (e) => { const val = e.target.value || todayISO(); state.currentDate = val; saveState(); renderAllForDate(val); });
+      $("#btnToday").addEventListener("click", () => { const t = todayISO(); $("#meetingDate").value = t; state.currentDate = t; saveState(); renderAllForDate(t); });
+      $("#btnPrevDay").addEventListener("click", () => shiftDay(-1));
+      $("#btnNextDay").addEventListener("click", () => shiftDay(1));
+      function shiftDay(delta){ const d = new Date(state.currentDate); d.setDate(d.getDate()+delta); const iso = d.toISOString().slice(0,10); $("#meetingDate").value = iso; state.currentDate = iso; saveState(); renderAllForDate(iso); }
+
+      // Miembros
+      $("#btnAddMember").addEventListener("click", () => addMember($("#newMemberInput").value));
+      $("#newMemberInput").addEventListener("keydown", (e) => { if(e.key === "Enter"){ addMember(e.currentTarget.value); } });
+
+      // Tema y ofrenda
+      $("#weeklyTopic").addEventListener("input", (e) => { ensureWeek(state.currentDate).topic = e.target.value; saveState(); if($("#modalShare").open) $("#txtPreview").value = buildShareTextFancy(); });
+      $("#offering").addEventListener("input", (e) => { ensureWeek(state.currentDate).offering = e.target.value; saveState(); if($("#modalShare").open) $("#txtPreview").value = buildShareTextFancy(); });
+
+      // Testimonios
+      $("#btnAddTestimony").addEventListener("click", () => {
+        const v = $("#newTestimonyInput").value.trim(); if(!v) return;
+        ensureWeek(state.currentDate).testimonies.push(v); $("#newTestimonyInput").value = ""; saveState();
+        renderChipsList(ensureWeek(state.currentDate).testimonies, $("#testimoniesList"), "testimony");
+        if($("#modalShare").open) $("#txtPreview").value = buildShareTextFancy();
+      });
+      $("#newTestimonyInput").addEventListener("keydown", (e) => { if(e.key === "Enter"){ $("#btnAddTestimony").click(); } });
+
+      // Visitas
+      $("#btnAddVisitor").addEventListener("click", () => {
+        const v = $("#newVisitorInput").value.trim(); if(!v) return;
+        ensureWeek(state.currentDate).visitors.push(v); $("#newVisitorInput").value = ""; saveState();
+        renderChipsList(ensureWeek(state.currentDate).visitors, $("#visitorsList"), "visitor");
+        if($("#modalShare").open) $("#txtPreview").value = buildShareTextFancy();
+      });
+      $("#newVisitorInput").addEventListener("keydown", (e) => { if(e.key === "Enter"){ $("#btnAddVisitor").click(); } });
+
+      // Fotos
+      $("#photoInput").addEventListener("change", async (e) => {
+        const file = e.target.files?.[0]; if(!file) return;
+        const caption = $("#photoCaption").value.trim();
+        const dataURL = await fileToDataURL(file);
+        state.photos.push({ id: "p_"+Date.now().toString(36), dataURL, caption, date: state.currentDate });
+        $("#photoCaption").value = ""; e.target.value = "";
+        saveState(); renderPhotos();
+      });
+
+      // Compartir
+      $("#btnShare").addEventListener("click", () => openShareModal());
+      $("#btnShareWA").addEventListener("click", () => openShareModal());
+      $("#btnShareWhatsApp").addEventListener("click", shareViaWhatsApp);
+      $("#btnShareGeneric").addEventListener("click", shareViaGeneric);
+      $("#btnCopyMsg").addEventListener("click", async () => {
+        try{ await navigator.clipboard.writeText(buildShareTextFancy()); showToast("Texto copiado"); }
+        catch{ alert("No se pudo copiar automáticamente. Selecciona el texto y copia manualmente."); }
+      });
+
+      // Limpiar día
+      $("#btnClearDay").addEventListener("click", () => {
+        const date = state.currentDate;
+        if(confirm("¿Limpiar todos los datos de la fecha actual (tema, ofrenda, testimonios, visitas y asistencia)?")){
+          state.weeks[date] = { date, topic: "", offering: "", testimonies: [], visitors: [], attendance: {} };
+          saveState(); renderAllForDate(date);
+          if($("#modalShare").open) $("#txtPreview").value = buildShareTextFancy();
+          showToast("Día limpiado");
+        }
+      });
+
+      // NUEVO: Respaldo/Restaurar conectados
+      $("#btnBackup").addEventListener("click", backupData);
+      $("#btnRestore").addEventListener("click", restoreData);
+
+      // NUEVO: Instalar
+      const btnInstall = $("#btnInstall");
+      btnInstall.addEventListener("click", async () => {
+        try{
+          if(deferredPrompt){
+            deferredPrompt.prompt();
+            const choice = await deferredPrompt.userChoice;
+            if(choice.outcome === "accepted"){ showToast("Instalación iniciada"); }
+            deferredPrompt = null;
+            return;
+          }
+          // Si ya está instalada
+          if(window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone){
+            showToast("Ya está instalada");
+            return;
+          }
+          // Mostrar ayuda
+          openInstallHelp();
+        }catch(e){
+          openInstallHelp();
+        }
+      });
+    }
+
+    async function fileToDataURL(file){
+      return new Promise((res,rej) => { const reader = new FileReader(); reader.onload = () => res(reader.result); reader.onerror = rej; reader.readAsDataURL(file); });
+    }
+
+    async function setupPWA(){
+      try{
+        const icon192 = await makeIcon(192,192);
+        const icon512 = await makeIcon(512,512);
+        const manifest = {
+          name: "Reportes GA",
+          short_name: "GA Reportes",
+          description: "PWA para reportes de líderes de Grupos de Amistad.",
+          start_url: ".",
+          scope: ".",
+          display: "standalone",
+          background_color: "#0a1116",
+          theme_color: "#0f6f7b",
+          icons: [
+            { src: icon192, sizes: "192x192", type: "image/png", purpose: "any maskable" },
+            { src: icon512, sizes: "512x512", type: "image/png", purpose: "any maskable" }
+          ]
+        };
+        const mBlob = new Blob([JSON.stringify(manifest)], { type: "application/manifest+json" });
+        const mUrl = URL.createObjectURL(mBlob);
+        const link = document.createElement("link"); link.rel = "manifest"; link.href = mUrl; document.head.appendChild(link);
+
+        const swCode = `
+          const CACHE = "ga-cache-v1";
+          self.addEventListener("install", (e) => {
+            e.waitUntil((async () => {
+              const cache = await caches.open(CACHE);
+              await cache.addAll(["./"]);
+            })());
+          });
+          self.addEventListener("activate", (e) => {
+            e.waitUntil((async () => {
+              const keys = await caches.keys();
+              await Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)));
+              self.clients.claim();
+            })());
+          });
+          self.addEventListener("fetch", (e) => {
+            const req = e.request;
+            e.respondWith((async () => {
+              const cached = await caches.match(req);
+              if(cached) return cached;
+              try{
+                const res = await fetch(req);
+                if(req.method === "GET" && res && res.status === 200 && res.type === "basic"){
+                  const cache = await caches.open(CACHE);
+                  cache.put(req, res.clone());
+                }
+                return res;
+              }catch(err){
+                const cached2 = await caches.match("./");
+                return cached2 || new Response("Offline", { status: 200, headers: { "Content-Type":"text/plain" } });
+              }
+            })());
+          });
+        `;
+        const swBlob = new Blob([swCode], { type: "text/javascript" });
+        const swUrl = URL.createObjectURL(swBlob);
+        if('serviceWorker' in navigator){ await navigator.serviceWorker.register(swUrl); }
+
+        // beforeinstallprompt
+        window.addEventListener("beforeinstallprompt", (e) => {
+          e.preventDefault();
+          deferredPrompt = e;
+          // opcional: feedback visual
+          showToast("Listo para instalar");
+        });
+        window.addEventListener("appinstalled", () => { showToast("Aplicación instalada"); });
+
+        setTimeout(() => { URL.revokeObjectURL(mUrl); URL.revokeObjectURL(swUrl); }, 5000);
+      }catch(e){ console.warn("PWA setup falló:", e); }
+    }
+
+    async function makeIcon(w,h){
+      const c = document.createElement("canvas"); c.width = w; c.height = h;
+      const ctx = c.getContext("2d");
+      const g = ctx.createLinearGradient(0,0,w,h);
+      g.addColorStop(0, "#0f6f7b"); g.addColorStop(.55, "#0b5660"); g.addColorStop(1, "#0f6f7b");
+      ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
+      ctx.lineWidth = Math.max(12, Math.round(w*0.06));
+      ctx.strokeStyle = "rgba(255,255,255,.92)";
+      const m = w*0.18;
+      ctx.beginPath(); ctx.moveTo(w/2, m); ctx.lineTo(w/2, h-m); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(m, h/2); ctx.lineTo(w-m, h/2); ctx.stroke();
+      const rg = ctx.createRadialGradient(w*0.3, h*0.2, 0, w*0.3, h*0.2, w*0.6);
+      rg.addColorStop(0, "rgba(255,255,255,.25)"); rg.addColorStop(1, "transparent");
+      ctx.fillStyle = rg; ctx.fillRect(0,0,w,h);
+      return c.toDataURL("image/png");
+    }
+
+    // Utilidades varias
+    window.addEventListener('unhandledrejection', (e) => console.warn('Unhandled rejection:', e.reason));
+  </script>
+</body>
+</html>
